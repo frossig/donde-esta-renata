@@ -14,10 +14,6 @@ export function isAdmin(request: NextRequest): boolean {
   return getRole(request) === 'admin'
 }
 
-export function requireAuth(request: NextRequest): Role {
-  const role = getRole(request)
-  if (!role) {
-    throw new Error('Unauthenticated')
-  }
-  return role
+export function getRequiredRole(request: NextRequest): Role | null {
+  return getRole(request)
 }

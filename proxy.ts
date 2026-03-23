@@ -5,7 +5,7 @@ import { getRole } from './lib/auth'
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Allow login page and login API through
+  // Add any public routes here that don't need authentication (e.g. webhooks, health checks)
   if (pathname === '/login' || pathname === '/api/login') {
     return NextResponse.next()
   }

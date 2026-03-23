@@ -1,6 +1,11 @@
 import { cookies } from 'next/headers'
 
 export async function POST(request: Request) {
+  if (!process.env.FAMILY_PASSWORD || !process.env.ADMIN_PASSWORD) {
+    console.error('Missing required env vars: FAMILY_PASSWORD and/or ADMIN_PASSWORD')
+    return Response.json({ error: 'Server misconfiguration: passwords not set.' }, { status: 500 })
+  }
+
   const body = await request.json()
   const { password } = body
 
@@ -10,6 +15,9 @@ export async function POST(request: Request) {
 
   let role: 'family' | 'admin' | null = null
 
+  // Note: not using crypto.timingSafeEqual here — low-risk for this use case
+  // (family PWA, no public attacker timing oracle), but consider upgrading if
+  // ever deployed more broadly.
   if (password === process.env.FAMILY_PASSWORD) {
     role = 'family'
   } else if (password === process.env.ADMIN_PASSWORD) {
