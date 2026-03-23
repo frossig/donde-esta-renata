@@ -176,8 +176,14 @@ export default function MapView({ stops, tripStatus, photoCounts }: Props) {
             <path d={IBERIA_PATH} fill="#e8dfc8" stroke="#c8b89a" strokeWidth="0.5" />
 
             {/* Route lines */}
-            {routeSegments.map(({ from, fromCoords: fc, toCoords: tc, isVisited }, i) => {
-              if (!fc || !tc) return null
+            {routeSegments.map(({ from, to, fromCoords: fc, toCoords: tc, isVisited }, i) => {
+              if (!fc || !tc) {
+                if (process.env.NODE_ENV === 'development') {
+                  if (!fc) console.warn(`MapView: no SVG coords for stop "${from.id}" — add it to STOP_COORDS`)
+                  if (!tc) console.warn(`MapView: no SVG coords for stop "${to.id}" — add it to STOP_COORDS`)
+                }
+                return null
+              }
               return (
                 <line
                   key={`seg-${i}`}
@@ -207,7 +213,12 @@ export default function MapView({ stops, tripStatus, photoCounts }: Props) {
             {/* Stop markers */}
             {uniqueMarkers.map((stop) => {
               const coords = STOP_COORDS[stop.id]
-              if (!coords) return null
+              if (!coords) {
+                if (process.env.NODE_ENV === 'development') {
+                  console.warn(`MapView: no SVG coords for stop "${stop.id}" — add it to STOP_COORDS`)
+                }
+                return null
+              }
               // For display_order-based visual state we need the original sorted index
               const origIdx = sortedStops.findIndex((s) => s.id === stop.id)
               const state   = stopState(stop, origIdx)
@@ -320,7 +331,7 @@ export default function MapView({ stops, tripStatus, photoCounts }: Props) {
       </div>
 
       {/* ── Stop strip ── */}
-      <div className="pb-safe px-0 pb-6">
+      <div className="px-0 pb-6" style={{ paddingBottom: 'max(24px, env(safe-area-inset-bottom))' }}>
         <div className="overflow-x-auto scrollbar-hide">
           <div className="flex gap-3 px-4 py-3" style={{ minWidth: 'max-content' }}>
             {sortedStops.map((stop, idx) => {

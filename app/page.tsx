@@ -1,15 +1,11 @@
-import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
+import { getRoleFromCookies } from '@/lib/auth'
 import { getDb } from '@/lib/db'
 import MapView, { type Stop, type TripStatus } from '@/app/components/MapView'
 
 export default async function HomePage() {
-  // Auth: read session cookie directly (server component — no request arg)
-  const cookieStore = await cookies()
-  const session = cookieStore.get('session')?.value
-  if (session !== 'family' && session !== 'admin') {
-    redirect('/login')
-  }
+  const role = await getRoleFromCookies()
+  if (!role) redirect('/login')
 
   const db = await getDb()
 
@@ -44,7 +40,7 @@ export default async function HomePage() {
   }
 
   // Fetch trip_status (single row)
-  const statusResult = await db.execute(`SELECT * FROM trip_status WHERE id = 1`)
+  const statusResult = await db.execute(`SELECT state, current_stop_id, from_stop_id, to_stop_id, transport_mode, updated_at FROM trip_status WHERE id = 1`)
 
   let tripStatus: TripStatus | null = null
   if (statusResult.rows.length > 0) {
