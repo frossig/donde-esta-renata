@@ -2,7 +2,7 @@
 
 export interface PhotoData {
   id: string
-  stop_id: string
+  stop_id: string | null
   r2_key: string
   thumbnail_key: string | null
   taken_at: string | null

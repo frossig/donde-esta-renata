@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS trip_status (
 
 CREATE TABLE IF NOT EXISTS photos (
   id TEXT PRIMARY KEY,
-  stop_id TEXT NOT NULL,
+  stop_id TEXT,
   r2_key TEXT NOT NULL,
   thumbnail_key TEXT,
   taken_at TEXT,
