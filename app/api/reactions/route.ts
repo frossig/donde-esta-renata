@@ -1,20 +1,15 @@
-import { cookies } from 'next/headers'
 import { getDb } from '@/lib/db'
+import { getRoleFromCookies } from '@/lib/auth'
 
 const VALID_REACTORS = ['Faus', 'Alfo', 'Papá', 'Mamá'] as const
 type Reactor = (typeof VALID_REACTORS)[number]
 
-async function getAuthRole(): Promise<string | null> {
-  const cookieStore = await cookies()
-  const session = cookieStore.get('session')?.value
-  if (session === 'family' || session === 'admin') return session
-  return null
-}
+const VALID_EMOJIS = ['❤️', '😍', '😂', '🤩', '👏']
 
 // ─── GET /api/reactions?photoId=xxx ───────────────────────────────────────────
 
 export async function GET(request: Request) {
-  const role = await getAuthRole()
+  const role = await getRoleFromCookies()
   if (!role) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
@@ -50,7 +45,7 @@ export async function GET(request: Request) {
 // ─── POST /api/reactions ──────────────────────────────────────────────────────
 
 export async function POST(request: Request) {
-  const role = await getAuthRole()
+  const role = await getRoleFromCookies()
   if (!role) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
@@ -88,6 +83,11 @@ export async function POST(request: Request) {
   const emojiVal = typeof emoji === 'string' && emoji.length > 0 ? emoji : null
   const commentRaw = typeof comment === 'string' ? comment.trim() : null
   const commentVal = commentRaw && commentRaw.length > 0 ? commentRaw : null
+
+  // Validate emoji value
+  if (emojiVal !== null && !VALID_EMOJIS.includes(emojiVal)) {
+    return Response.json({ error: 'Invalid emoji' }, { status: 400 })
+  }
 
   // At least one of emoji or comment must be present
   if (!emojiVal && !commentVal) {

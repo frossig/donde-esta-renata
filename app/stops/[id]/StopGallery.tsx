@@ -2,6 +2,9 @@
 
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
+import type { PhotoData } from '@/lib/types'
+
+export type { PhotoData }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -14,19 +17,6 @@ export interface StopData {
   date_end: string
   postcard_text: string | null
   cover_photo_id: string | null
-}
-
-export interface PhotoData {
-  id: string
-  stop_id: string
-  r2_key: string
-  thumbnail_key: string | null
-  taken_at: string | null
-  lat: number | null
-  lng: number | null
-  media_type: string
-  uploaded_at: string
-  assignment: string | null
 }
 
 interface Props {

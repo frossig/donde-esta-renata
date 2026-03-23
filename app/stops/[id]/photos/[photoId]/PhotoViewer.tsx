@@ -4,30 +4,9 @@ import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Cookies from 'js-cookie'
+import type { PhotoData, ReactionData } from '@/lib/types'
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-export interface PhotoData {
-  id: string
-  stop_id: string
-  r2_key: string
-  thumbnail_key: string | null
-  taken_at: string | null
-  lat: number | null
-  lng: number | null
-  media_type: string
-  uploaded_at: string
-  assignment: string | null
-}
-
-export interface ReactionData {
-  id: string
-  photo_id: string
-  emoji: string | null
-  comment: string | null
-  reactor: string
-  created_at: string
-}
+export type { PhotoData, ReactionData }
 
 interface Props {
   stop: { id: string; name: string }
@@ -79,6 +58,11 @@ export default function PhotoViewer({
     }
   }, [])
 
+  // Reset reactions when navigating to a different photo
+  useEffect(() => {
+    setReactions(initialReactions)
+  }, [photo.id, initialReactions])
+
   // ── Navigation ──
   const hasPrev = currentPhotoIndex > 0
   const hasNext = currentPhotoIndex < total - 1
@@ -86,13 +70,13 @@ export default function PhotoViewer({
   const goToPrev = useCallback(() => {
     if (!hasPrev) return
     const prev = photos[currentPhotoIndex - 1]
-    router.push(`/stops/${stop.id}/photos/${prev.id}`)
+    router.replace(`/stops/${stop.id}/photos/${prev.id}`)
   }, [hasPrev, photos, currentPhotoIndex, router, stop.id])
 
   const goToNext = useCallback(() => {
     if (!hasNext) return
     const next = photos[currentPhotoIndex + 1]
-    router.push(`/stops/${stop.id}/photos/${next.id}`)
+    router.replace(`/stops/${stop.id}/photos/${next.id}`)
   }, [hasNext, photos, currentPhotoIndex, router, stop.id])
 
   // ── Swipe detection ──
@@ -159,11 +143,18 @@ export default function PhotoViewer({
         setSubmitError((data as { error?: string }).error ?? 'Error al reaccionar')
         return
       }
-      // Re-fetch reactions
+      // Re-fetch reactions; fall back to optimistic update if re-fetch fails
       const updated = await fetch(`/api/reactions?photoId=${photo.id}`)
       if (updated.ok) {
         const data = await updated.json()
         setReactions((data as { reactions: ReactionData[] }).reactions ?? [])
+      } else {
+        // Fallback: optimistically merge the new reaction from the POST response
+        const postData = await res.json() as { reaction: ReactionData }
+        setReactions(prev => {
+          const filtered = prev.filter(r => r.reactor !== postData.reaction.reactor)
+          return [...filtered, postData.reaction]
+        })
       }
       // Reset form
       setSelectedEmoji(null)
@@ -235,6 +226,9 @@ export default function PhotoViewer({
               className="w-full h-full"
               style={{ objectFit: 'contain', maxHeight: '70vh' }}
               src={mediaUrl(photo.r2_key)}
+              {...(photo.thumbnail_key != null
+                ? { poster: `/api/media/${encodeURIComponent(photo.thumbnail_key)}` }
+                : {})}
             />
           ) : (
             <Image
