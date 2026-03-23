@@ -36,7 +36,7 @@ export default async function HomePage() {
 
   const photoCounts: Record<string, number> = {}
   for (const row of photoCountsResult.rows) {
-    photoCounts[row.stop_id as string] = row.count as number
+    photoCounts[row.stop_id as string] = Number(row.count ?? 0)
   }
 
   // Fetch trip_status (single row)

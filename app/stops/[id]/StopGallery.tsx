@@ -70,9 +70,7 @@ function mediaUrl(photo: PhotoData): string {
 }
 
 function heroUrl(photo: PhotoData): string {
-  // For hero use thumbnail_key if available, fallback to r2_key
-  const key = photo.thumbnail_key ?? photo.r2_key
-  return `/api/media/${encodeURIComponent(key)}`
+  return `/api/media/${encodeURIComponent(photo.r2_key)}`
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -83,9 +81,6 @@ export default function StopGallery({ stop, photos, totalReactions }: Props) {
   const coverPhoto = stop.cover_photo_id
     ? photos.find((p) => p.id === stop.cover_photo_id) ?? null
     : null
-
-  // Photos to show in the grid (all photos — cover will show separately as hero)
-  const gridPhotos = photos
 
   return (
     <div
@@ -206,7 +201,7 @@ export default function StopGallery({ stop, photos, totalReactions }: Props) {
               className="grid gap-1.5"
               style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}
             >
-              {gridPhotos.map((photo) => (
+              {photos.map((photo) => (
                 <div
                   key={photo.id}
                   className="relative rounded-lg overflow-hidden cursor-pointer"

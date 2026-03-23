@@ -73,7 +73,7 @@ export default async function StopPage({
     args: [id],
   })
 
-  const totalReactions = (reactionsResult.rows[0]?.total as number) ?? 0
+  const totalReactions = Number(reactionsResult.rows[0]?.total ?? 0)
 
   return (
     <StopGallery
