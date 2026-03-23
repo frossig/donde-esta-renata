@@ -207,11 +207,14 @@ export default function UploadForm({ stops }: { stops: Stop[] }) {
             <span className="font-semibold">{stopName}</span>
           </p>
           <ul className="mt-2 space-y-1">
-            {results.map((r) => (
-              <li key={r.photoId} className="text-xs text-green-700">
-                {r.key.split('/').pop()} — stop: {r.stopId ?? 'sin asignar'} ({r.assignment})
-              </li>
-            ))}
+            {results.map((r) => {
+              const stopName = stops.find(s => s.id === r.stopId)?.name ?? (r.stopId ? r.stopId : 'sin asignar')
+              return (
+                <li key={r.photoId} className="text-xs text-green-700">
+                  {r.key.split('/').pop()} — stop: {stopName} ({r.assignment})
+                </li>
+              )
+            })}
           </ul>
         </div>
       )}

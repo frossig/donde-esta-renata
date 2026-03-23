@@ -145,109 +145,157 @@ export async function POST(request: Request) {
   }))
 
   const results = []
+  const errors = []
 
   for (const item of files as Array<{ key: string; stopId: string }>) {
     const { key, stopId: requestedStopId } = item
 
-    // Infer media type from key extension
-    const lowerKey = key.toLowerCase()
-    const isVideo =
-      lowerKey.endsWith('.mp4') ||
-      lowerKey.endsWith('.mov') ||
-      lowerKey.endsWith('.avi') ||
-      lowerKey.endsWith('.webm') ||
-      lowerKey.endsWith('.mkv')
-    const mediaType = isVideo ? 'video' : 'photo'
+    try {
+      // Infer media type from key extension
+      const lowerKey = key.toLowerCase()
+      const isVideo =
+        lowerKey.endsWith('.mp4') ||
+        lowerKey.endsWith('.mov') ||
+        lowerKey.endsWith('.avi') ||
+        lowerKey.endsWith('.webm') ||
+        lowerKey.endsWith('.mkv')
+      const mediaType = isVideo ? 'video' : 'photo'
 
-    // Download file to read EXIF
-    const fileBuffer = await fetchFromR2(key)
+      // Parse EXIF (photos only; skip download entirely for videos)
+      let takenAt: Date | null = null
+      let lat: number | null = null
+      let lng: number | null = null
 
-    // Parse EXIF (photos only; exifr handles graceful failure on videos/no-EXIF)
-    let takenAt: Date | null = null
-    let lat: number | null = null
-    let lng: number | null = null
+      if (!isVideo) {
+        // Download file once to read EXIF and generate thumbnail
+        const fileBuffer = await fetchFromR2(key)
 
-    if (!isVideo) {
-      try {
-        // exifr uses dynamic import pattern; import it here
-        const exifr = (await import('exifr')).default
-        const exif = await exifr.parse(fileBuffer, {
-          pick: ['DateTimeOriginal', 'CreateDate', 'GPSLatitude', 'GPSLongitude', 'latitude', 'longitude'],
-          translateValues: true,
-        })
-        if (exif) {
-          const dt = exif.DateTimeOriginal ?? exif.CreateDate
-          if (dt instanceof Date) takenAt = dt
-          const latVal = exif.latitude ?? (exif.GPSLatitude as number | undefined)
-          const lngVal = exif.longitude ?? (exif.GPSLongitude as number | undefined)
-          if (typeof latVal === 'number') lat = latVal
-          if (typeof lngVal === 'number') lng = lngVal
+        try {
+          // exifr uses dynamic import pattern; import it here
+          const exifr = (await import('exifr')).default
+          const exif = await exifr.parse(fileBuffer, {
+            pick: ['DateTimeOriginal', 'CreateDate', 'GPSLatitude', 'GPSLongitude', 'latitude', 'longitude'],
+            translateValues: true,
+          })
+          if (exif) {
+            const dt = exif.DateTimeOriginal ?? exif.CreateDate
+            if (dt instanceof Date) takenAt = dt
+            const latVal = exif.latitude ?? (exif.GPSLatitude as number | undefined)
+            const lngVal = exif.longitude ?? (exif.GPSLongitude as number | undefined)
+            if (typeof latVal === 'number') lat = latVal
+            if (typeof lngVal === 'number') lng = lngVal
+          }
+        } catch {
+          // No EXIF — continue with nulls
         }
-      } catch {
-        // No EXIF — continue with nulls
+
+        // Thumbnail generation for photos
+        let thumbnailKey: string | null = null
+        try {
+          const thumb = await sharp(Buffer.from(fileBuffer))
+            .resize(800, 800, { fit: 'inside', withoutEnlargement: true })
+            .jpeg({ quality: 80 })
+            .toBuffer()
+
+          thumbnailKey = `${key}-thumb.jpg`
+          await r2.send(
+            new PutObjectCommand({
+              Bucket: bucket,
+              Key: thumbnailKey,
+              Body: thumb,
+              ContentType: 'image/jpeg',
+            }),
+          )
+        } catch {
+          // Thumbnail failure is non-fatal
+          thumbnailKey = null
+        }
+
+        // Stop assignment
+        let stopId: string | null
+        let assignment: string
+
+        if (requestedStopId !== 'auto') {
+          const targetStop = allStops.find(s => s.id === requestedStopId)
+          if (!targetStop) {
+            errors.push({ key, error: `Unknown stop: ${requestedStopId}` })
+            continue
+          }
+          stopId = requestedStopId
+          assignment = 'manual'
+        } else {
+          const detected = detectStop(allStops, takenAt, lat, lng)
+          stopId = detected.stopId
+          assignment = detected.assignment
+        }
+
+        // Insert into DB
+        const photoId = crypto.randomUUID()
+        const uploadedAt = new Date().toISOString()
+
+        await db.execute({
+          sql: `INSERT INTO photos (id, stop_id, r2_key, thumbnail_key, taken_at, lat, lng, media_type, uploaded_at, assignment)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          args: [
+            photoId,
+            stopId,
+            key,
+            thumbnailKey,
+            takenAt ? takenAt.toISOString() : null,
+            lat,
+            lng,
+            mediaType,
+            uploadedAt,
+            assignment,
+          ],
+        })
+
+        results.push({ key, stopId, assignment, photoId })
+      } else {
+        // Videos: skip R2 download, insert with null metadata
+        let stopId: string | null
+        let assignment: string
+
+        if (requestedStopId !== 'auto') {
+          const targetStop = allStops.find(s => s.id === requestedStopId)
+          if (!targetStop) {
+            errors.push({ key, error: `Unknown stop: ${requestedStopId}` })
+            continue
+          }
+          stopId = requestedStopId
+          assignment = 'manual'
+        } else {
+          const detected = detectStop(allStops, null, null, null)
+          stopId = detected.stopId
+          assignment = detected.assignment
+        }
+
+        const photoId = crypto.randomUUID()
+        const uploadedAt = new Date().toISOString()
+
+        await db.execute({
+          sql: `INSERT INTO photos (id, stop_id, r2_key, thumbnail_key, taken_at, lat, lng, media_type, uploaded_at, assignment)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          args: [
+            photoId,
+            stopId,
+            key,
+            null,
+            null,
+            null,
+            null,
+            mediaType,
+            uploadedAt,
+            assignment,
+          ],
+        })
+
+        results.push({ key, stopId, assignment, photoId })
       }
+    } catch (err) {
+      errors.push({ key, error: err instanceof Error ? err.message : 'Unknown error' })
     }
-
-    // Stop assignment
-    let stopId: string | null
-    let assignment: string
-
-    if (requestedStopId !== 'auto') {
-      stopId = requestedStopId
-      assignment = 'manual'
-    } else {
-      const detected = detectStop(allStops, takenAt, lat, lng)
-      stopId = detected.stopId
-      assignment = detected.assignment
-    }
-
-    // Thumbnail generation for photos
-    let thumbnailKey: string | null = null
-    if (mediaType === 'photo') {
-      try {
-        const thumb = await sharp(Buffer.from(fileBuffer))
-          .resize(800, 800, { fit: 'inside', withoutEnlargement: true })
-          .jpeg({ quality: 80 })
-          .toBuffer()
-
-        thumbnailKey = `${key}-thumb.jpg`
-        await r2.send(
-          new PutObjectCommand({
-            Bucket: bucket,
-            Key: thumbnailKey,
-            Body: thumb,
-            ContentType: 'image/jpeg',
-          }),
-        )
-      } catch {
-        // Thumbnail failure is non-fatal
-        thumbnailKey = null
-      }
-    }
-
-    // Insert into DB
-    const photoId = crypto.randomUUID()
-    const uploadedAt = new Date().toISOString()
-
-    await db.execute({
-      sql: `INSERT INTO photos (id, stop_id, r2_key, thumbnail_key, taken_at, lat, lng, media_type, uploaded_at, assignment)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      args: [
-        photoId,
-        stopId,
-        key,
-        thumbnailKey,
-        takenAt ? takenAt.toISOString() : null,
-        lat,
-        lng,
-        mediaType,
-        uploadedAt,
-        assignment,
-      ],
-    })
-
-    results.push({ key, stopId, assignment, photoId })
   }
 
-  return Response.json({ results })
+  return Response.json({ results, errors })
 }

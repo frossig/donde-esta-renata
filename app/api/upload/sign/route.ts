@@ -3,10 +3,15 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { getRoleFromCookies } from '@/lib/auth'
 import { getR2, getBucketName } from '@/lib/r2'
 
+const ALLOWED_TYPES = [
+  'image/jpeg', 'image/png', 'image/heic', 'image/heif', 'image/webp',
+  'image/gif', 'video/mp4', 'video/quicktime', 'video/mov'
+]
+
 function sanitizeFilename(name: string): string {
   return name
     .toLowerCase()
-    .replace(/[^a-z0-9.\-_]/g, '-')
+    .replace(/[^a-z0-9._-]/g, '-')
     .replace(/-+/g, '-')
     .slice(0, 200)
 }
@@ -40,6 +45,14 @@ export async function POST(request: Request) {
   const uploads = await Promise.all(
     files.map(async (file: unknown) => {
       const { name, type } = file as { name: string; type: string }
+
+      if (typeof name !== 'string' || name.length === 0) {
+        throw new Error('Invalid file name')
+      }
+      if (typeof type !== 'string' || !ALLOWED_TYPES.includes(type)) {
+        throw new Error(`Invalid or unsupported file type: ${type}`)
+      }
+
       const uuid = crypto.randomUUID()
       const sanitized = sanitizeFilename(name)
       const key = `${prefix}/${uuid}-${sanitized}`

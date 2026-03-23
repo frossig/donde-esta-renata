@@ -33,10 +33,18 @@ export async function DELETE(
   const r2 = getR2()
   const bucket = getBucketName()
 
-  // Delete from R2
-  await r2.send(new DeleteObjectCommand({ Bucket: bucket, Key: r2Key }))
+  // Delete from R2 (continue to DB delete even if R2 fails — orphaned R2 objects are preferable to orphaned DB rows)
+  try {
+    await r2.send(new DeleteObjectCommand({ Bucket: bucket, Key: r2Key }))
+  } catch (err) {
+    console.error('R2 delete failed for', r2Key, err)
+  }
   if (thumbnailKey) {
-    await r2.send(new DeleteObjectCommand({ Bucket: bucket, Key: thumbnailKey }))
+    try {
+      await r2.send(new DeleteObjectCommand({ Bucket: bucket, Key: thumbnailKey }))
+    } catch (err) {
+      console.error('R2 delete failed for', thumbnailKey, err)
+    }
   }
 
   // If this photo is the cover of a stop, clear cover_photo_id
