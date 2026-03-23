@@ -1,14 +1,9 @@
-import { createClient } from "@libsql/client";
 import { readFileSync } from "fs";
 import { join } from "path";
+import { getDb } from "../lib/db";
 
 async function seed() {
-  const tursoUrl = process.env.TURSO_DATABASE_URL;
-  const tursoToken = process.env.TURSO_AUTH_TOKEN;
-
-  const db = tursoUrl
-    ? createClient({ url: tursoUrl, authToken: tursoToken })
-    : createClient({ url: "file:local.db" });
+  const db = await getDb();
 
   // Run schema
   const schemaPath = join(process.cwd(), "lib", "schema.sql");

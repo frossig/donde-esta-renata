@@ -44,3 +44,5 @@ next-env.d.ts
 # local database
 local.db
 *.db-journal
+*.db-wal
+*.db-shm

@@ -11,16 +11,20 @@ CREATE TABLE IF NOT EXISTS stops (
   display_order INTEGER NOT NULL,
   is_current INTEGER NOT NULL DEFAULT 0,
   postcard_text TEXT,
+  -- cover_photo_id is a soft reference (no FK constraint) to avoid a circular
+  -- dependency between stops and photos. Referential integrity is enforced
+  -- at the application layer.
   cover_photo_id TEXT
 );
 
 CREATE TABLE IF NOT EXISTS trip_status (
-  id INTEGER PRIMARY KEY DEFAULT 1,
-  state TEXT NOT NULL DEFAULT 'at_stop',
+  -- CHECK (id = 1) enforces that only a single row can ever exist in this table.
+  id INTEGER PRIMARY KEY CHECK (id = 1) DEFAULT 1,
+  state TEXT NOT NULL DEFAULT 'at_stop' CHECK (state IN ('at_stop', 'in_transit')),
   current_stop_id TEXT,
   from_stop_id TEXT,
   to_stop_id TEXT,
-  transport_mode TEXT,
+  transport_mode TEXT CHECK (transport_mode IN ('plane', 'train', 'bus')),
   updated_at TEXT NOT NULL
 );
 
@@ -48,3 +52,6 @@ CREATE TABLE IF NOT EXISTS reactions (
   FOREIGN KEY (photo_id) REFERENCES photos(id),
   UNIQUE(photo_id, reactor)
 );
+
+CREATE INDEX IF NOT EXISTS idx_photos_stop_id ON photos (stop_id);
+CREATE INDEX IF NOT EXISTS idx_reactions_photo_id ON reactions (photo_id);
