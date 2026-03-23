@@ -27,6 +27,7 @@ export interface TripStatus {
 interface Props {
   stops: Stop[]
   tripStatus: TripStatus | null
+  photoCounts: Record<string, number>
 }
 
 // ─── SVG coordinates for the simplified Europe map ────────────────────────────
@@ -77,7 +78,7 @@ const IBERIA_PATH = `
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function MapView({ stops, tripStatus }: Props) {
+export default function MapView({ stops, tripStatus, photoCounts }: Props) {
   const router = useRouter()
 
   // Sort stops by display_order
@@ -204,7 +205,7 @@ export default function MapView({ stops, tripStatus }: Props) {
             )}
 
             {/* Stop markers */}
-            {uniqueMarkers.map((stop, idx) => {
+            {uniqueMarkers.map((stop) => {
               const coords = STOP_COORDS[stop.id]
               if (!coords) return null
               // For display_order-based visual state we need the original sorted index
@@ -350,7 +351,7 @@ export default function MapView({ stops, tripStatus }: Props) {
                     className="mt-1 text-xs"
                     style={{ color: '#a09080' }}
                   >
-                    0 fotos
+                    {photoCounts[stop.id] ?? 0} fotos
                   </span>
                 </button>
               )

@@ -33,6 +33,16 @@ export default async function HomePage() {
     date_end:      row.date_end      as string,
   }))
 
+  // Fetch photo counts per stop
+  const photoCountsResult = await db.execute(
+    `SELECT stop_id, COUNT(*) as count FROM photos GROUP BY stop_id`
+  )
+
+  const photoCounts: Record<string, number> = {}
+  for (const row of photoCountsResult.rows) {
+    photoCounts[row.stop_id as string] = row.count as number
+  }
+
   // Fetch trip_status (single row)
   const statusResult = await db.execute(`SELECT * FROM trip_status WHERE id = 1`)
 
@@ -48,5 +58,5 @@ export default async function HomePage() {
     }
   }
 
-  return <MapView stops={stops} tripStatus={tripStatus} />
+  return <MapView stops={stops} tripStatus={tripStatus} photoCounts={photoCounts} />
 }
