@@ -26,3 +26,5 @@ export interface StopThumbnail {
   id: string
   imgKey: string
 }
+
+export type ReactionsByStop = Record<string, Record<string, number>>

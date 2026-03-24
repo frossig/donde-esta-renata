@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { type StopThumbnail } from '@/lib/types'
+import { type StopThumbnail, type ReactionsByStop } from '@/lib/types'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -31,7 +31,7 @@ interface Props {
   tripStatus: TripStatus | null
   photoCounts: Record<string, number>
   photosByStop: Record<string, StopThumbnail[]>
-  reactionsByStop: Record<string, Record<string, number>>
+  reactionsByStop: ReactionsByStop
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

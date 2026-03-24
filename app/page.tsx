@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation'
 import { getRoleFromCookies } from '@/lib/auth'
 import { getDb } from '@/lib/db'
 import MapView, { type Stop, type TripStatus } from '@/app/components/MapView'
-import { type StopThumbnail } from '@/lib/types'
+import { type StopThumbnail, type ReactionsByStop } from '@/lib/types'
 
 // Never cache — page content depends on session cookie
 export const dynamic = 'force-dynamic'
@@ -73,7 +73,7 @@ export default async function HomePage() {
      ORDER BY count DESC`
   )
 
-  const reactionsByStop: Record<string, Record<string, number>> = {}
+  const reactionsByStop: ReactionsByStop = {}
   for (const row of reactionsResult.rows) {
     const stopId = row.stop_id as string
     const emoji = row.emoji as string
