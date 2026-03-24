@@ -42,6 +42,26 @@ export default async function HomePage() {
     photoCounts[row.stop_id as string] = Number(row.count ?? 0)
   }
 
+  // Fetch up to 4 most-recent thumbnail keys per stop
+  const thumbnailsResult = await db.execute(
+    `SELECT id, stop_id, r2_key, thumbnail_key
+     FROM (
+       SELECT id, stop_id, r2_key, thumbnail_key, taken_at, uploaded_at,
+              ROW_NUMBER() OVER (PARTITION BY stop_id ORDER BY taken_at DESC, uploaded_at DESC) AS rn
+       FROM photos
+       WHERE stop_id IS NOT NULL
+     )
+     WHERE rn <= 4`
+  )
+
+  const photosByStop: Record<string, { id: string; imgKey: string }[]> = {}
+  for (const row of thumbnailsResult.rows) {
+    const stopId = row.stop_id as string
+    const imgKey = (row.thumbnail_key as string | null) ?? (row.r2_key as string)
+    if (!photosByStop[stopId]) photosByStop[stopId] = []
+    photosByStop[stopId].push({ id: row.id as string, imgKey })
+  }
+
   // Fetch trip_status (single row)
   const statusResult = await db.execute(`SELECT state, current_stop_id, from_stop_id, to_stop_id, transport_mode, updated_at FROM trip_status WHERE id = 1`)
 
@@ -105,5 +125,12 @@ export default async function HomePage() {
     }
   }
 
-  return <MapView stops={computedStops} tripStatus={computedTripStatus} photoCounts={photoCounts} />
+  return (
+    <MapView
+      stops={computedStops}
+      tripStatus={computedTripStatus}
+      photoCounts={photoCounts}
+      photosByStop={photosByStop}
+    />
+  )
 }

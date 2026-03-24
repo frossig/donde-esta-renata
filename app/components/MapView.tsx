@@ -28,6 +28,7 @@ interface Props {
   stops: Stop[]
   tripStatus: TripStatus | null
   photoCounts: Record<string, number>
+  photosByStop: Record<string, { id: string; imgKey: string }[]>
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -47,7 +48,7 @@ function formatDateRange(start: string, end: string): string {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function MapView({ stops, tripStatus, photoCounts }: Props) {
+export default function MapView({ stops, tripStatus, photoCounts, photosByStop }: Props) {
   const router = useRouter()
 
   const sortedStops = [...stops].sort((a, b) => a.display_order - b.display_order)
@@ -263,6 +264,27 @@ export default function MapView({ stops, tripStatus, photoCounts }: Props) {
                     <p className="mt-2" style={{ fontSize: 13, color: '#b8905a', fontWeight: 500 }}>
                       {count === 0 ? 'Sin fotos aún' : `${count} ${count === 1 ? 'foto' : 'fotos'}`}
                     </p>
+                  )}
+
+                  {/* Thumbnail strip */}
+                  {state !== 'pending' && photosByStop[stop.id]?.length > 0 && (
+                    <div className="mt-2 flex gap-1.5 overflow-hidden">
+                      {photosByStop[stop.id].slice(0, 4).map((p) => (
+                        <img
+                          key={p.id}
+                          src={`/api/media/${encodeURIComponent(p.imgKey)}`}
+                          alt=""
+                          loading="lazy"
+                          style={{
+                            width: 64,
+                            height: 64,
+                            objectFit: 'cover',
+                            borderRadius: 8,
+                            flexShrink: 0,
+                          }}
+                        />
+                      ))}
+                    </div>
                   )}
 
                   {/* Postcard text */}
