@@ -3,6 +3,9 @@ import { getRoleFromCookies } from '@/lib/auth'
 import { getDb } from '@/lib/db'
 import MapView, { type Stop, type TripStatus } from '@/app/components/MapView'
 
+// Never cache — page content depends on session cookie
+export const dynamic = 'force-dynamic'
+
 export default async function HomePage() {
   const role = await getRoleFromCookies()
   if (!role) redirect('/login')
@@ -54,5 +57,53 @@ export default async function HomePage() {
     }
   }
 
-  return <MapView stops={stops} tripStatus={tripStatus} photoCounts={photoCounts} />
+  // ── Auto-compute current stop from today's date ────────────────────────────
+  // If Renata hasn't manually set her location (no is_current in DB), derive it
+  // from the itinerary dates. She can always override via the Admin panel.
+  const hasManualCurrent = stops.some((s) => s.is_current === 1)
+  const manualInTransit  = tripStatus?.state === 'in_transit'
+
+  let computedStops = stops
+  let computedTripStatus = tripStatus
+
+  if (!hasManualCurrent && !manualInTransit) {
+    // Use UTC date string 'YYYY-MM-DD' to avoid timezone edge-cases
+    const today = new Date().toISOString().slice(0, 10)
+    const sorted = [...stops].sort((a, b) => a.display_order - b.display_order)
+
+    // Find the stop whose date range covers today
+    const currentStop = sorted.find(
+      (s) => today >= s.date_start && today <= s.date_end
+    )
+
+    if (currentStop) {
+      // Mark it as current in the in-memory array (no DB write)
+      computedStops = stops.map((s) => ({
+        ...s,
+        is_current: s.id === currentStop.id ? 1 : 0,
+      }))
+      computedTripStatus = {
+        state: 'at_stop',
+        current_stop_id: currentStop.id,
+        from_stop_id: null,
+        to_stop_id: null,
+        transport_mode: null,
+      }
+    } else {
+      // Today is between stops (travel day) — find the surrounding segment
+      const prevStop = [...sorted].reverse().find((s) => today > s.date_end)
+      const nextStop = sorted.find((s) => today < s.date_start)
+      if (prevStop && nextStop) {
+        computedTripStatus = {
+          state: 'in_transit',
+          current_stop_id: null,
+          from_stop_id: prevStop.id,
+          to_stop_id: nextStop.id,
+          transport_mode: null,
+        }
+      }
+    }
+  }
+
+  return <MapView stops={computedStops} tripStatus={computedTripStatus} photoCounts={photoCounts} />
 }

@@ -1,13 +1,11 @@
 'use client'
 
 import { useState, FormEvent } from 'react'
-import { useRouter } from 'next/navigation'
 
 export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const router = useRouter()
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -22,7 +20,8 @@ export default function LoginPage() {
       })
 
       if (res.ok) {
-        router.push('/')
+        // Full reload so the server layout re-renders with the new session cookie
+        window.location.href = '/'
       } else {
         const data = await res.json()
         setError(data.error ?? 'Contraseña incorrecta')

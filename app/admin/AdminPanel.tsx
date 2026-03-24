@@ -143,7 +143,7 @@ function TripStatusSection({
             fontWeight: 600,
           }}
         >
-          Viajando de A a B
+          Viajando
         </button>
       </div>
 

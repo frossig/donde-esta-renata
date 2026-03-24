@@ -10,7 +10,7 @@ export interface Stop {
   country: string
   flag: string
   display_order: number
-  is_current: number // 0 | 1 (SQLite integer)
+  is_current: number // 0 | 1
   postcard_text: string | null
   date_start: string
   date_end: string
@@ -30,345 +30,252 @@ interface Props {
   photoCounts: Record<string, number>
 }
 
-// ─── SVG coordinates for the simplified Europe map ────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const STOP_COORDS: Record<string, { x: number; y: number }> = {
-  'madrid-1':  { x: 85,  y: 185 },
-  'sevilla':   { x: 70,  y: 210 },
-  'barcelona': { x: 130, y: 175 },
-  'londres':   { x: 145, y: 95  },
-  'amsterdam': { x: 200, y: 85  },
-  'bruselas':  { x: 195, y: 105 },
-  'madrid-2':  { x: 85,  y: 185 }, // same dot as madrid-1, not drawn separately
-}
-
-// Transport mode emoji
-function transportIcon(mode: string | null): string {
-  if (mode === 'plane') return '✈️'
+function transportEmoji(mode: string | null): string {
   if (mode === 'train') return '🚂'
-  if (mode === 'bus')   return '🚌'
+  if (mode === 'bus') return '🚌'
   return '✈️'
 }
 
-// ─── Simplified Europe SVG land shapes ────────────────────────────────────────
-// These are hand-crafted rough outlines that give a recognisable silhouette
-// within a 500×300 viewBox.
-
-const EUROPE_PATH = `
-  M 30 60
-  L 55 50 L 80 45 L 110 48 L 140 42 L 170 38 L 210 35 L 250 33
-  L 290 38 L 320 45 L 340 55 L 355 70 L 360 90 L 350 110
-  L 355 130 L 345 148 L 335 165 L 320 178 L 305 185
-  L 290 200 L 275 215 L 270 230 L 260 240 L 250 235
-  L 240 225 L 230 215 L 220 208 L 210 200 L 200 195
-  L 185 192 L 172 188 L 160 192 L 148 198 L 138 202
-  L 128 210 L 118 220 L 108 228 L 98 235 L 88 240
-  L 75 238 L 65 228 L 55 218 L 48 205 L 42 190
-  L 35 175 L 30 160 L 28 140 L 25 120 L 22 100
-  L 25 80 L 28 70 Z
-`
-
-const IBERIA_PATH = `
-  M 48 170
-  L 42 185 L 40 198 L 45 212 L 55 222 L 68 228
-  L 80 232 L 92 228 L 102 220 L 110 210 L 115 198
-  L 118 185 L 115 172 L 108 162 L 98 155 L 85 152
-  L 72 155 L 60 162 L 52 168 Z
-`
+function formatDateRange(start: string, end: string): string {
+  const opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' }
+  const s = new Date(start + 'T12:00:00').toLocaleDateString('es-ES', opts)
+  const e = new Date(end + 'T12:00:00').toLocaleDateString('es-ES', opts)
+  return `${s} – ${e}`
+}
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function MapView({ stops, tripStatus, photoCounts }: Props) {
   const router = useRouter()
 
-  // Sort stops by display_order
   const sortedStops = [...stops].sort((a, b) => a.display_order - b.display_order)
-
-  // Find the current stop index
   const currentIndex = sortedStops.findIndex((s) => s.is_current === 1)
 
-  // Determine stop visual state
-  function stopState(stop: Stop, idx: number): 'visited' | 'current' | 'pending' {
-    if (stop.is_current === 1) return 'current'
+  function stopState(idx: number): 'visited' | 'current' | 'pending' {
+    if (sortedStops[idx].is_current === 1) return 'current'
     if (currentIndex >= 0 && idx < currentIndex) return 'visited'
-    if (currentIndex < 0) return 'pending' // no current set yet → all pending
     return 'pending'
   }
 
-  // Build route segments: pairs of consecutive stops
-  // Note: madrid-2 shares coords with madrid-1 so the line just returns there.
-  const routeSegments = sortedStops.slice(0, -1).map((from, i) => {
-    const to = sortedStops[i + 1]
-    const fromCoords = STOP_COORDS[from.id]
-    const toCoords   = STOP_COORDS[to.id]
-    const isVisited  = currentIndex >= 0 && i < currentIndex
-    return { from, to, fromCoords, toCoords, isVisited }
-  })
-
-  // Transit state
   const inTransit = tripStatus?.state === 'in_transit'
-  const fromStop  = inTransit ? sortedStops.find((s) => s.id === tripStatus?.from_stop_id) : null
-  const toStop    = inTransit ? sortedStops.find((s) => s.id === tripStatus?.to_stop_id)   : null
-  const fromCoords = fromStop ? STOP_COORDS[fromStop.id] : null
-  const toCoords2  = toStop   ? STOP_COORDS[toStop.id]   : null
-  const midX = fromCoords && toCoords2 ? (fromCoords.x + toCoords2.x) / 2 : null
-  const midY = fromCoords && toCoords2 ? (fromCoords.y + toCoords2.y) / 2 : null
+  const transitTo = inTransit
+    ? sortedStops.find((s) => s.id === tripStatus?.to_stop_id)
+    : null
 
-  // Deduplicate map markers — madrid-1 and madrid-2 share the same coordinates,
-  // so only render one dot.
-  const seenCoords = new Set<string>()
-  const uniqueMarkers = sortedStops.filter((stop) => {
-    const key = `${STOP_COORDS[stop.id]?.x},${STOP_COORDS[stop.id]?.y}`
-    if (seenCoords.has(key)) return false
-    seenCoords.add(key)
-    return true
-  })
+  // Line geometry constants
+  const RAIL_W = 28   // px — total width of left rail column
+  const DOT_SIZE = 10   // px — small dot
+  const DOT_CURR = 18   // px — current stop dot
+  const LINE_W = 2    // px
+  const CARD_TOP_PAD = 18 // must match card's paddingTop
+
+  // Dot center Y from row top — aligns with city name text
+  // card paddingTop (18) + half of text line height (~13) = ~24
+  const dotCenterY = CARD_TOP_PAD + 13
 
   return (
-    <div
-      className="flex flex-col min-h-screen"
-      style={{ backgroundColor: '#faf6f1' }}
-    >
-      {/* ── Header ── */}
-      <header className="px-5 pt-8 pb-4 text-center">
-        <h1
-          className="font-serif text-3xl font-bold tracking-tight"
-          style={{ color: '#5a4636' }}
-        >
-          Donde está Renata
+    <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#faf6f1' }}>
+
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <header className="px-5 pt-8 pb-6 text-center">
+        <h1 className="font-serif font-bold tracking-tight" style={{ fontSize: 32, lineHeight: 1.15, color: '#3d2b1f' }}>
+          ¿Dónde está{' '}
+          <span style={{ color: '#c4956a' }}>Renata</span>
+          {' '}✈️?
         </h1>
-        <p
-          className="mt-1 text-base italic"
-          style={{ color: '#a07050' }}
-        >
-          su aventura por Europa ✈️
+        <p className="mt-1.5 italic" style={{ fontSize: 15, color: '#9a7456' }}>
+          su aventura por Europa
         </p>
 
         {/* Transit banner */}
-        {inTransit && toStop && (
+        {inTransit && transitTo && (
           <div
-            className="mt-3 mx-auto max-w-xs rounded-full px-4 py-1.5 text-sm font-medium"
-            style={{ backgroundColor: '#fde8cc', color: '#7a4020' }}
+            className="mt-4 inline-flex items-center gap-2 rounded-full px-5 py-2"
+            style={{ backgroundColor: '#fde8cc', color: '#7a3a10', border: '1px solid #f5c896', fontSize: 14, fontWeight: 500 }}
           >
-            {transportIcon(tripStatus?.transport_mode ?? null)}{' '}
-            Renata está viajando a {toStop.name}
+            <span>{transportEmoji(tripStatus?.transport_mode ?? null)}</span>
+            <span>Renata está viajando a {transitTo.name}</span>
           </div>
         )}
       </header>
 
-      {/* ── Map ── */}
-      <div className="flex-1 px-3 pb-2">
-        <div
-          className="w-full rounded-2xl overflow-hidden shadow-sm"
-          style={{ backgroundColor: '#dce8f0', border: '1px solid #c8d8e4' }}
-        >
-          <svg
-            viewBox="0 0 500 300"
-            className="w-full"
-            style={{ maxHeight: '56vw' }}
-            aria-label="Mapa de Europa con la ruta del viaje"
-          >
-            {/* Ocean background */}
-            <rect width="500" height="300" fill="#cddde8" />
+      {/* ── Timeline ───────────────────────────────────────────────────────── */}
+      <div className="flex-1 pb-12" style={{ paddingLeft: 20, paddingRight: 16, maxWidth: 600, margin: '0 auto', width: '100%' }}>
+        {sortedStops.map((stop, idx) => {
+          const state = stopState(idx)
+          const isFirst = idx === 0
+          const isLast = idx === sortedStops.length - 1
+          const count = photoCounts[stop.id] ?? 0
+          const dotSize = state === 'current' ? DOT_CURR : DOT_SIZE
+          const dotLeft = RAIL_W / 2 - dotSize / 2  // center dot in rail
 
-            {/* Land */}
-            <path d={EUROPE_PATH} fill="#e8dfc8" stroke="#c8b89a" strokeWidth="1" />
-            <path d={IBERIA_PATH} fill="#e8dfc8" stroke="#c8b89a" strokeWidth="0.5" />
+          // Line color
+          const lineColor = (state === 'visited' || state === 'current') ? '#c4956a' : '#d8cfc6'
 
-            {/* Route lines */}
-            {routeSegments.map(({ from, to, fromCoords: fc, toCoords: tc, isVisited }, i) => {
-              if (!fc || !tc) {
-                if (process.env.NODE_ENV === 'development') {
-                  if (!fc) console.warn(`MapView: no SVG coords for stop "${from.id}" — add it to STOP_COORDS`)
-                  if (!tc) console.warn(`MapView: no SVG coords for stop "${to.id}" — add it to STOP_COORDS`)
-                }
-                return null
-              }
-              return (
-                <line
-                  key={`seg-${i}`}
-                  x1={fc.x} y1={fc.y}
-                  x2={tc.x} y2={tc.y}
-                  stroke={isVisited ? '#c4956a' : '#b0a090'}
-                  strokeWidth={isVisited ? 2 : 1.5}
-                  strokeDasharray={isVisited ? undefined : '4 3'}
-                  opacity={isVisited ? 1 : 0.5}
-                />
-              )
-            })}
+          // Is this the active transit segment?
+          const isTransitSegment = inTransit && tripStatus?.from_stop_id === stop.id && !isLast
 
-            {/* Transit icon */}
-            {inTransit && midX !== null && midY !== null && (
-              <text
-                x={midX}
-                y={midY - 4}
-                textAnchor="middle"
-                fontSize="14"
-                className="select-none"
-              >
-                {transportIcon(tripStatus?.transport_mode ?? null)}
-              </text>
-            )}
+          return (
+            <div
+              key={stop.id}
+              className="flex items-stretch"
+              style={{ gap: 12 }}
+            >
+              {/* ── Rail ── */}
+              <div style={{ position: 'relative', width: RAIL_W, flexShrink: 0 }}>
 
-            {/* Stop markers */}
-            {uniqueMarkers.map((stop) => {
-              const coords = STOP_COORDS[stop.id]
-              if (!coords) {
-                if (process.env.NODE_ENV === 'development') {
-                  console.warn(`MapView: no SVG coords for stop "${stop.id}" — add it to STOP_COORDS`)
-                }
-                return null
-              }
-              // For display_order-based visual state we need the original sorted index
-              const origIdx = sortedStops.findIndex((s) => s.id === stop.id)
-              const state   = stopState(stop, origIdx)
+                {/* Line above dot (connects from previous row — skip on first) */}
+                {!isFirst && (
+                  <div style={{
+                    position: 'absolute',
+                    left: RAIL_W / 2 - LINE_W / 2,
+                    top: 0,
+                    height: dotCenterY - dotSize / 2,
+                    width: LINE_W,
+                    backgroundColor: lineColor,
+                  }} />
+                )}
 
-              if (state === 'current') {
-                return (
-                  <g
-                    key={stop.id}
-                    onClick={() => router.push(`/stops/${stop.id}`)}
-                    style={{ cursor: 'pointer' }}
-                  >
-                    {/* Pulsing ring */}
-                    <circle
-                      cx={coords.x} cy={coords.y} r={10}
-                      fill="#e07842"
-                      opacity={0.25}
-                    >
-                      <animate
-                        attributeName="r"
-                        values="8;14;8"
-                        dur="2s"
-                        repeatCount="indefinite"
-                      />
-                      <animate
-                        attributeName="opacity"
-                        values="0.35;0;0.35"
-                        dur="2s"
-                        repeatCount="indefinite"
-                      />
-                    </circle>
-                    <circle
-                      cx={coords.x} cy={coords.y} r={7}
-                      fill="#e07842"
-                      stroke="#fff"
-                      strokeWidth="1.5"
-                    />
-                    <text
-                      x={coords.x} y={coords.y - 12}
-                      textAnchor="middle"
-                      fontSize="11"
-                      className="select-none"
-                    >
-                      📍
-                    </text>
-                    <text
-                      x={coords.x} y={coords.y + 17}
-                      textAnchor="middle"
-                      fontSize="8"
-                      fontWeight="600"
-                      fill="#5a4636"
-                    >
-                      {stop.name}
-                    </text>
-                  </g>
-                )
-              }
+                {/* Line below dot (connects to next row — skip on last) */}
+                {!isLast && (
+                  isTransitSegment ? (
+                    // Transit segment: orange line + transport icon
+                    <div style={{
+                      position: 'absolute',
+                      left: RAIL_W / 2 - LINE_W / 2,
+                      top: dotCenterY + dotSize / 2,
+                      bottom: 0,
+                      width: LINE_W,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                    }}>
+                      <div style={{ width: LINE_W, flex: 1, backgroundColor: '#e07842', opacity: 0.6 }} />
+                      <span style={{ fontSize: 14, lineHeight: 1, margin: '4px 0', marginLeft: -6 }}>
+                        {transportEmoji(tripStatus?.transport_mode ?? null)}
+                      </span>
+                      <div style={{ width: LINE_W, flex: 1, backgroundColor: '#e07842', opacity: 0.3 }} />
+                    </div>
+                  ) : (
+                    <div style={{
+                      position: 'absolute',
+                      left: RAIL_W / 2 - LINE_W / 2,
+                      top: dotCenterY + dotSize / 2,
+                      bottom: 0,
+                      width: LINE_W,
+                      backgroundColor: lineColor,
+                    }} />
+                  )
+                )}
 
-              if (state === 'visited') {
-                return (
-                  <g
-                    key={stop.id}
-                    onClick={() => router.push(`/stops/${stop.id}`)}
-                    style={{ cursor: 'pointer' }}
-                  >
-                    <circle
-                      cx={coords.x} cy={coords.y} r={5}
-                      fill="#c4956a"
-                      stroke="#fff"
-                      strokeWidth="1.2"
-                    />
-                    <text
-                      x={coords.x} y={coords.y + 14}
-                      textAnchor="middle"
-                      fontSize="7"
-                      fill="#7a5540"
-                    >
-                      {stop.name}
-                    </text>
-                  </g>
-                )
-              }
+                {/* Dot */}
+                <div style={{
+                  position: 'absolute',
+                  top: dotCenterY - dotSize / 2,
+                  left: dotLeft,
+                  width: dotSize,
+                  height: dotSize,
+                  borderRadius: '50%',
+                  zIndex: 1,
+                  backgroundColor:
+                    state === 'current' ? '#e07842' :
+                      state === 'visited' ? '#c4956a' : '#ccc4bb',
+                  border: state === 'current'
+                    ? `3px solid #faf6f1`
+                    : `2px solid #faf6f1`,
+                  boxShadow: state === 'current'
+                    ? '0 0 0 3px rgba(224,120,66,0.3)'
+                    : 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}>
+                  {state === 'visited' && (
+                    <div style={{
+                      width: 4, height: 4, borderRadius: '50%',
+                      backgroundColor: '#fff',
+                    }} />
+                  )}
+                </div>
+              </div>
 
-              // pending
-              return (
-                <g
-                  key={stop.id}
-                  onClick={() => router.push(`/stops/${stop.id}`)}
-                  style={{ cursor: 'pointer' }}
-                  opacity={0.4}
-                >
-                  <circle
-                    cx={coords.x} cy={coords.y} r={4}
-                    fill="#a09080"
-                    stroke="#fff"
-                    strokeWidth="1"
-                  />
-                  <text
-                    x={coords.x} y={coords.y + 13}
-                    textAnchor="middle"
-                    fontSize="7"
-                    fill="#7a6858"
-                  >
-                    {stop.name}
-                  </text>
-                </g>
-              )
-            })}
-          </svg>
-        </div>
-      </div>
-
-      {/* ── Stop strip ── */}
-      <div className="px-0 pb-6" style={{ paddingBottom: 'max(24px, env(safe-area-inset-bottom))' }}>
-        <div className="overflow-x-auto scrollbar-hide">
-          <div className="flex gap-3 px-4 py-3" style={{ minWidth: 'max-content' }}>
-            {sortedStops.map((stop, idx) => {
-              const state = stopState(stop, idx)
-              const isCurrent = state === 'current'
-              const isPending = state === 'pending'
-
-              return (
+              {/* ── Card ── */}
+              <div className="flex-1" style={{ paddingBottom: isLast ? 0 : 12 }}>
                 <button
-                  key={stop.id}
                   onClick={() => router.push(`/stops/${stop.id}`)}
-                  className="flex flex-col items-center rounded-xl px-4 py-3 text-left transition-transform active:scale-95"
+                  className="w-full text-left rounded-2xl transition-all active:scale-[0.98]"
                   style={{
-                    backgroundColor: isCurrent ? '#fff8f2' : '#f5ede2',
-                    border: isCurrent ? '2px solid #e07842' : '1.5px solid #ddd0c0',
-                    minWidth: '80px',
-                    opacity: isPending ? 0.5 : 1,
+                    padding: `${CARD_TOP_PAD}px 18px 16px`,
+                    backgroundColor: state === 'pending' ? 'transparent' : '#ffffff',
+                    border:
+                      state === 'current' ? '1.5px solid #e07842' :
+                        state === 'visited' ? '1px solid #e8d8c4' : 'none',
+                    boxShadow: state === 'current'
+                      ? '0 0 0 3px rgba(224,120,66,0.08), 0 2px 8px rgba(0,0,0,0.06)'
+                      : state === 'visited'
+                        ? '0 1px 4px rgba(0,0,0,0.05)'
+                        : 'none',
+                    opacity: state === 'pending' ? 0.45 : 1,
                   }}
                 >
-                  <span className="text-2xl leading-none">{stop.flag}</span>
-                  <span
-                    className="mt-1.5 text-xs font-semibold text-center leading-tight"
-                    style={{ color: isCurrent ? '#7a3010' : '#5a4636' }}
-                  >
-                    {stop.name}
-                  </span>
-                  <span
-                    className="mt-1 text-xs"
-                    style={{ color: '#a09080' }}
-                  >
-                    {photoCounts[stop.id] ?? 0} fotos
-                  </span>
+                  {/* Header row: flag + name + date */}
+                  <div className="flex items-center gap-2">
+                    <span style={{ fontSize: 22, lineHeight: 1 }}>{stop.flag}</span>
+                    <span
+                      className="font-serif font-bold flex-1"
+                      style={{
+                        fontSize: state === 'current' ? 21 : 19,
+                        lineHeight: 1.2,
+                        color:
+                          state === 'current' ? '#6b2a08' :
+                            state === 'visited' ? '#3d2b1f' : '#7a6858',
+                      }}
+                    >
+                      {stop.name}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: 13,
+                        fontWeight: 500,
+                        color:
+                          state === 'current' ? '#a04820' :
+                            state === 'visited' ? '#8a6848' : '#a8998a',
+                        whiteSpace: 'nowrap',
+                        flexShrink: 0,
+                      }}
+                    >
+                      {formatDateRange(stop.date_start, stop.date_end)}
+                    </span>
+                  </div>
+
+                  {/* "Aquí ahora" badge */}
+                  {state === 'current' && (
+                    <div className="mt-2 inline-flex items-center gap-1" style={{ fontSize: 12 }}>
+                      <span>📍</span>
+                      <span style={{ color: '#c05010', fontWeight: 600 }}>Aquí ahora</span>
+                    </div>
+                  )}
+
+                  {/* Photo count */}
+                  {state !== 'pending' && (
+                    <p className="mt-2" style={{ fontSize: 13, color: '#b8905a', fontWeight: 500 }}>
+                      {count === 0 ? 'Sin fotos aún' : `${count} ${count === 1 ? 'foto' : 'fotos'}`}
+                    </p>
+                  )}
+
+                  {/* Postcard text */}
+                  {stop.postcard_text && state !== 'pending' && (
+                    <p className="mt-2 italic line-clamp-2" style={{ fontSize: 13, color: '#8a6040', lineHeight: 1.45 }}>
+                      "{stop.postcard_text}"
+                    </p>
+                  )}
                 </button>
-              )
-            })}
-          </div>
-        </div>
+              </div>
+            </div>
+          )
+        })}
       </div>
     </div>
   )

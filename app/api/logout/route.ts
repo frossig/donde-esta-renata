@@ -1,14 +1,15 @@
 import { cookies } from 'next/headers'
-import { redirect } from 'next/navigation'
+import { NextResponse } from 'next/server'
 
-export async function GET() {
+export async function GET(request: Request) {
   const cookieStore = await cookies()
   cookieStore.set('session', '', {
     maxAge: 0,
+    expires: new Date(0),
     path: '/',
     httpOnly: true,
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production',
   })
-  redirect('/login')
+  return NextResponse.redirect(new URL('/login', request.url))
 }

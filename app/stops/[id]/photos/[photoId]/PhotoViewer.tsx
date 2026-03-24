@@ -13,6 +13,7 @@ interface Props {
   photos: PhotoData[]
   currentPhotoIndex: number
   initialReactions: ReactionData[]
+  isAdmin?: boolean
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -37,6 +38,7 @@ export default function PhotoViewer({
   photos,
   currentPhotoIndex,
   initialReactions,
+  isAdmin = false,
 }: Props) {
   const router = useRouter()
   const photo = photos[currentPhotoIndex]
@@ -44,17 +46,20 @@ export default function PhotoViewer({
 
   // ── Reactions state ──
   const [reactions, setReactions] = useState<ReactionData[]>(initialReactions)
-  const [selectedName, setSelectedName] = useState<ReactorName | null>(null)
   const [selectedEmoji, setSelectedEmoji] = useState<string | null>(null)
   const [comment, setComment] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
 
+  // ── Name modal state ──
+  const [showNameModal, setShowNameModal] = useState(false)
+  const [savedName, setSavedName] = useState<ReactorName | null>(null)
+
   // Read reactor_name cookie on mount
   useEffect(() => {
     const saved = Cookies.get(REACTOR_COOKIE)
     if (saved && (REACTOR_NAMES as readonly string[]).includes(saved)) {
-      setSelectedName(saved as ReactorName)
+      setSavedName(saved as ReactorName)
     }
   }, [])
 
@@ -108,25 +113,25 @@ export default function PhotoViewer({
     return () => window.removeEventListener('keydown', handleKey)
   }, [goToPrev, goToNext])
 
-  // ── Name selection ──
-  const handleSelectName = (name: ReactorName) => {
-    setSelectedName(name)
-    Cookies.set(REACTOR_COOKIE, name, { expires: 30 })
-  }
-
   // ── Emoji selection ──
   const handleSelectEmoji = (emoji: string) => {
     setSelectedEmoji((prev) => (prev === emoji ? null : emoji))
   }
 
-  // ── Submit reaction ──
-  const canSubmit =
-    selectedName !== null && (selectedEmoji !== null || comment.trim().length > 0)
+  // ── Submit reaction (called after name is confirmed in modal) ──
+  const canSubmit = selectedEmoji !== null || comment.trim().length > 0
 
-  const handleSubmit = async () => {
+  const handleOpenModal = () => {
     if (!canSubmit || submitting) return
-    setSubmitting(true)
     setSubmitError(null)
+    setShowNameModal(true)
+  }
+
+  const handleNameConfirmed = async (name: ReactorName) => {
+    setSavedName(name)
+    Cookies.set(REACTOR_COOKIE, name, { expires: 30 })
+    setShowNameModal(false)
+    setSubmitting(true)
     try {
       const res = await fetch('/api/reactions', {
         method: 'POST',
@@ -135,7 +140,7 @@ export default function PhotoViewer({
           photoId: photo.id,
           emoji: selectedEmoji,
           comment: comment.trim() || null,
-          reactor: selectedName,
+          reactor: name,
         }),
       })
       if (!res.ok) {
@@ -143,20 +148,11 @@ export default function PhotoViewer({
         setSubmitError((data as { error?: string }).error ?? 'Error al reaccionar')
         return
       }
-      // Re-fetch reactions; fall back to optimistic update if re-fetch fails
       const updated = await fetch(`/api/reactions?photoId=${photo.id}`)
       if (updated.ok) {
         const data = await updated.json()
         setReactions((data as { reactions: ReactionData[] }).reactions ?? [])
-      } else {
-        // Fallback: optimistically merge the new reaction from the POST response
-        const postData = await res.json() as { reaction: ReactionData }
-        setReactions(prev => {
-          const filtered = prev.filter(r => r.reactor !== postData.reaction.reactor)
-          return [...filtered, postData.reaction]
-        })
       }
-      // Reset form
       setSelectedEmoji(null)
       setComment('')
     } catch {
@@ -289,68 +285,33 @@ export default function PhotoViewer({
           </div>
         )}
 
-        {/* ── Reaction panel ── */}
+        {/* ── Reaction panel — hidden for admin (Renata) ── */}
+        {isAdmin && (
+          <p className="mx-4 mt-4 mb-6 text-sm italic text-center" style={{ color: '#a09080' }}>
+            Las reacciones son para la familia 💛
+          </p>
+        )}
+        {!isAdmin && (
         <div className="mx-4 mt-4 mb-6 flex flex-col gap-4">
 
-          {/* Name selector */}
-          <div>
-            <p
-              className="text-xs font-semibold uppercase tracking-wide mb-2"
-              style={{ color: '#a07050' }}
-            >
-              ¿Quién sos?
-            </p>
-            <div className="flex gap-2 flex-wrap">
-              {REACTOR_NAMES.map((name) => (
-                <button
-                  key={name}
-                  onClick={() => handleSelectName(name)}
-                  className="px-3 py-1.5 rounded-full text-sm font-medium transition-colors"
-                  style={
-                    selectedName === name
-                      ? { backgroundColor: '#c4663a', color: '#fff', border: '1.5px solid #c4663a' }
-                      : { backgroundColor: 'transparent', color: '#c4663a', border: '1.5px solid #c4663a' }
-                  }
-                >
-                  {name}
-                </button>
-              ))}
-            </div>
-          </div>
-
           {/* Emoji picker */}
-          <div>
-            <p
-              className="text-xs font-semibold uppercase tracking-wide mb-2"
-              style={{ color: '#a07050' }}
-            >
-              Emoji (opcional)
-            </p>
-            <div className="flex gap-2">
-              {EMOJIS.map((emoji) => (
-                <button
-                  key={emoji}
-                  onClick={() => handleSelectEmoji(emoji)}
-                  className="text-2xl rounded-xl p-1.5 transition-all"
-                  style={
-                    selectedEmoji === emoji
-                      ? {
-                          backgroundColor: '#fff0e4',
-                          border: '2px solid #c4663a',
-                          transform: 'scale(1.15)',
-                        }
-                      : {
-                          backgroundColor: 'transparent',
-                          border: '2px solid transparent',
-                        }
-                  }
-                  aria-label={emoji}
-                  aria-pressed={selectedEmoji === emoji}
-                >
-                  {emoji}
-                </button>
-              ))}
-            </div>
+          <div className="flex gap-2 justify-center">
+            {EMOJIS.map((emoji) => (
+              <button
+                key={emoji}
+                onClick={() => handleSelectEmoji(emoji)}
+                className="text-2xl rounded-xl p-1.5 transition-all"
+                style={
+                  selectedEmoji === emoji
+                    ? { backgroundColor: '#fff0e4', border: '2px solid #c4663a', transform: 'scale(1.15)' }
+                    : { backgroundColor: 'transparent', border: '2px solid transparent' }
+                }
+                aria-label={emoji}
+                aria-pressed={selectedEmoji === emoji}
+              >
+                {emoji}
+              </button>
+            ))}
           </div>
 
           {/* Comment field */}
@@ -360,7 +321,7 @@ export default function PhotoViewer({
               onChange={(e) => setComment(e.target.value.slice(0, 200))}
               placeholder="Dejá un comentario..."
               rows={3}
-              className="w-full rounded-xl px-3 py-2 text-sm resize-none outline-none transition-colors"
+              className="w-full rounded-xl px-3 py-2 text-sm resize-none outline-none"
               style={{
                 backgroundColor: '#fff8f0',
                 border: '1.5px solid #ddc8a8',
@@ -368,43 +329,70 @@ export default function PhotoViewer({
                 fontFamily: 'inherit',
               }}
             />
-            <p
-              className="text-right text-xs mt-1"
-              style={{ color: comment.length >= 180 ? '#c4663a' : '#a07050' }}
-            >
+            <p className="text-right text-xs mt-1" style={{ color: comment.length >= 180 ? '#c4663a' : '#a07050' }}>
               {comment.length} / 200
             </p>
           </div>
 
           {/* Submit button */}
-          <div>
-            {submitError && (
-              <p className="text-sm mb-2" style={{ color: '#c4663a' }}>
-                {submitError}
-              </p>
-            )}
-            <button
-              onClick={handleSubmit}
-              disabled={!canSubmit || submitting}
-              className="w-full py-3 rounded-xl text-sm font-semibold transition-all"
-              style={
-                canSubmit && !submitting
-                  ? {
-                      backgroundColor: '#c4663a',
-                      color: '#fff',
-                      cursor: 'pointer',
-                    }
-                  : {
-                      backgroundColor: '#e8d0bc',
-                      color: '#b09070',
-                      cursor: 'not-allowed',
-                    }
-              }
-            >
-              {submitting ? 'Enviando...' : 'Reaccionar'}
-            </button>
-          </div>
+          {submitError && (
+            <p className="text-sm" style={{ color: '#c4663a' }}>{submitError}</p>
+          )}
+          <button
+            onClick={handleOpenModal}
+            disabled={!canSubmit || submitting}
+            className="w-full py-3 rounded-xl text-sm font-semibold transition-all"
+            style={
+              canSubmit && !submitting
+                ? { backgroundColor: '#c4663a', color: '#fff', cursor: 'pointer' }
+                : { backgroundColor: '#e8d0bc', color: '#b09070', cursor: 'not-allowed' }
+            }
+          >
+            {submitting ? 'Enviando...' : 'Reaccionar'}
+          </button>
         </div>
+        )}
+
+        {/* ── ¿Quién sos? modal ── */}
+        {showNameModal && (
+          <div
+            className="fixed inset-0 z-50 flex items-end justify-center"
+            style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
+            onClick={() => setShowNameModal(false)}
+          >
+            <div
+              className="w-full rounded-t-3xl p-6 pb-10"
+              style={{ backgroundColor: '#faf6f1', maxWidth: 480 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="w-10 h-1 rounded-full mx-auto mb-5" style={{ backgroundColor: '#d4c4b0' }} />
+              <p className="font-serif font-bold text-xl text-center mb-1" style={{ color: '#3d2b1f' }}>
+                ¿Quién sos?
+              </p>
+              {savedName && (
+                <p className="text-sm text-center mb-4" style={{ color: '#9a7456' }}>
+                  La última vez fuiste <strong>{savedName}</strong>
+                </p>
+              )}
+              <div className="grid grid-cols-2 gap-3 mt-4">
+                {REACTOR_NAMES.map((name) => (
+                  <button
+                    key={name}
+                    onClick={() => handleNameConfirmed(name)}
+                    className="py-3 rounded-2xl font-semibold text-base transition-all active:scale-95"
+                    style={
+                      savedName === name
+                        ? { backgroundColor: '#c4663a', color: '#fff' }
+                        : { backgroundColor: '#f0e8dc', color: '#6b3820', border: '1.5px solid #ddc8a8' }
+                    }
+                  >
+                    {name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

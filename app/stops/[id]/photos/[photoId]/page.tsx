@@ -85,6 +85,7 @@ export default async function PhotoPage({
       photos={photos}
       currentPhotoIndex={currentPhotoIndex}
       initialReactions={reactions}
+      isAdmin={role === 'admin'}
     />
   )
 }

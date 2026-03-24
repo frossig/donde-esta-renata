@@ -6,7 +6,7 @@ export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // Add any public routes here that don't need authentication (e.g. webhooks, health checks)
-  if (pathname === '/login' || pathname === '/api/login') {
+  if (pathname === '/login' || pathname === '/api/login' || pathname === '/api/logout') {
     return NextResponse.next()
   }
 
