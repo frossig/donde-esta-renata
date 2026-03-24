@@ -21,3 +21,8 @@ export interface ReactionData {
   reactor: string
   created_at: string
 }
+
+export interface StopThumbnail {
+  id: string
+  imgKey: string
+}

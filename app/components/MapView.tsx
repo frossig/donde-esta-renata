@@ -1,6 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
+import { type StopThumbnail } from '@/lib/types'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -28,7 +29,7 @@ interface Props {
   stops: Stop[]
   tripStatus: TripStatus | null
   photoCounts: Record<string, number>
-  photosByStop: Record<string, { id: string; imgKey: string }[]>
+  photosByStop: Record<string, StopThumbnail[]>
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -269,6 +270,7 @@ export default function MapView({ stops, tripStatus, photoCounts, photosByStop }
                   {/* Thumbnail strip */}
                   {state !== 'pending' && photosByStop[stop.id]?.length > 0 && (
                     <div className="mt-2 flex gap-1.5 overflow-hidden">
+                      {/* query already caps at 4 per stop; slice is defensive */}
                       {photosByStop[stop.id].slice(0, 4).map((p) => (
                         <img
                           key={p.id}

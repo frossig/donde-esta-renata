@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { getRoleFromCookies } from '@/lib/auth'
 import { getDb } from '@/lib/db'
 import MapView, { type Stop, type TripStatus } from '@/app/components/MapView'
+import { type StopThumbnail } from '@/lib/types'
 
 // Never cache — page content depends on session cookie
 export const dynamic = 'force-dynamic'
@@ -54,7 +55,7 @@ export default async function HomePage() {
      WHERE rn <= 4`
   )
 
-  const photosByStop: Record<string, { id: string; imgKey: string }[]> = {}
+  const photosByStop: Record<string, StopThumbnail[]> = {}
   for (const row of thumbnailsResult.rows) {
     const stopId = row.stop_id as string
     const imgKey = (row.thumbnail_key as string | null) ?? (row.r2_key as string)
