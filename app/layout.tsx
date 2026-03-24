@@ -94,14 +94,14 @@ export default async function RootLayout({
                 </Link>
               )}
 
-              <Link
+              <a
                 href="/api/logout"
                 className="flex flex-col items-center gap-0.5 text-xs font-medium px-3 py-1 rounded-lg transition-colors hover:bg-amber-50"
                 style={{ color: "#8a6040" }}
               >
                 <span className="text-lg leading-none">👋</span>
-                <span>Salir</span>
-              </Link>
+                <span>Cerrar sesión</span>
+              </a>
             </nav>
 
             {/* Desktop: fixed top bar */}
@@ -148,13 +148,13 @@ export default async function RootLayout({
                   </Link>
                 )}
 
-                <Link
+                <a
                   href="/api/logout"
                   className="flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-lg transition-colors hover:bg-amber-50"
                   style={{ color: "#8a6040" }}
                 >
                   Cerrar sesión
-                </Link>
+                </a>
               </div>
             </nav>
           </>
