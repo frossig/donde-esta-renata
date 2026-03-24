@@ -66,11 +66,14 @@ export default function PhotoViewer({
   // ── Share state ──
   const [canShare, setCanShare] = useState(false)
   useEffect(() => {
-    setCanShare(typeof navigator !== 'undefined' && typeof navigator.share === 'function')
+    setCanShare(typeof navigator.share === 'function')
   }, [])
 
   const handleShare = () => {
-    navigator.share({ title: stop.name, url: window.location.href }).catch(() => {})
+    navigator.share({ title: stop.name, url: window.location.href }).catch((err: unknown) => {
+      if (err instanceof DOMException && err.name === 'AbortError') return
+      // other errors (e.g. NotAllowedError) silently ignored in this private family app
+    })
   }
 
   // Reset reactions when navigating to a different photo
