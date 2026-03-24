@@ -63,6 +63,16 @@ export default function PhotoViewer({
     }
   }, [])
 
+  // ── Share state ──
+  const [canShare, setCanShare] = useState(false)
+  useEffect(() => {
+    setCanShare(typeof navigator !== 'undefined' && typeof navigator.share === 'function')
+  }, [])
+
+  const handleShare = () => {
+    navigator.share({ title: stop.name, url: window.location.href }).catch(() => {})
+  }
+
   // Reset reactions when navigating to a different photo
   useEffect(() => {
     setReactions(initialReactions)
@@ -182,12 +192,38 @@ export default function PhotoViewer({
           <span>{stop.name}</span>
         </button>
 
-        <span
-          className="text-sm font-medium tabular-nums"
-          style={{ color: '#8a6040' }}
-        >
-          {currentPhotoIndex + 1} / {total}
-        </span>
+        <div className="flex items-center gap-3">
+          {canShare && (
+            <button
+              onClick={handleShare}
+              aria-label="Compartir foto"
+              className="flex items-center justify-center transition-opacity hover:opacity-70 active:opacity-50"
+              style={{ color: '#8a6040' }}
+            >
+              <svg
+                width={22}
+                height={22}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+                <polyline points="16 6 12 2 8 6" />
+                <line x1="12" y1="2" x2="12" y2="15" />
+              </svg>
+            </button>
+          )}
+          <span
+            className="text-sm font-medium tabular-nums"
+            style={{ color: '#8a6040' }}
+          >
+            {currentPhotoIndex + 1} / {total}
+          </span>
+        </div>
       </div>
 
       {/* ── Photo / Video display ── */}
