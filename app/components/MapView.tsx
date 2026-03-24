@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect } from 'react'
+import React, { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 import { type StopThumbnail, type ReactionsByStop } from '@/lib/types'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -49,6 +50,19 @@ function formatDateRange(start: string, end: string): string {
   return `${s} – ${e}`
 }
 
+function reactionSummary(emojiMap: Record<string, number> | undefined): React.ReactNode {
+  if (!emojiMap) return null
+  const entries = Object.entries(emojiMap)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+  if (entries.length === 0) return null
+  return (
+    <p className="mt-1.5" style={{ fontSize: 13, color: '#b8905a', fontWeight: 500 }}>
+      {entries.map(([emoji, count]) => `${emoji} ${count}`).join('  ')}
+    </p>
+  )
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function MapView({ stops, tripStatus, photoCounts, photosByStop, reactionsByStop }: Props) {
@@ -57,7 +71,7 @@ export default function MapView({ stops, tripStatus, photoCounts, photosByStop, 
   useEffect(() => {
     const id = setInterval(() => router.refresh(), 5 * 60 * 1000)
     return () => clearInterval(id)
-  }, []) // empty deps — runs once on mount
+  }, [router]) // router is stable per Next.js App Router contract
 
   const sortedStops = [...stops].sort((a, b) => a.display_order - b.display_order)
   const currentIndex = sortedStops.findIndex((s) => s.is_current === 1)
@@ -279,37 +293,21 @@ export default function MapView({ stops, tripStatus, photoCounts, photosByStop, 
                     <div className="mt-2 flex gap-1.5 overflow-hidden">
                       {/* query already caps at 4 per stop; slice is defensive */}
                       {photosByStop[stop.id].slice(0, 4).map((p) => (
-                        <img
+                        <Image
                           key={p.id}
                           src={`/api/media/${encodeURIComponent(p.imgKey)}`}
                           alt=""
-                          loading="lazy"
-                          style={{
-                            width: 64,
-                            height: 64,
-                            objectFit: 'cover',
-                            borderRadius: 8,
-                            flexShrink: 0,
-                          }}
+                          width={64}
+                          height={64}
+                          unoptimized
+                          style={{ objectFit: 'cover', borderRadius: 8, flexShrink: 0 }}
                         />
                       ))}
                     </div>
                   )}
 
                   {/* Reaction summary */}
-                  {state !== 'pending' && (() => {
-                    const emojiMap = reactionsByStop[stop.id]
-                    if (!emojiMap) return null
-                    const entries = Object.entries(emojiMap)
-                      .sort((a, b) => b[1] - a[1])
-                      .slice(0, 3)
-                    if (entries.length === 0) return null
-                    return (
-                      <p className="mt-1.5" style={{ fontSize: 13, color: '#b8905a', fontWeight: 500 }}>
-                        {entries.map(([emoji, count]) => `${emoji} ${count}`).join('  ')}
-                      </p>
-                    )
-                  })()}
+                  {state !== 'pending' && reactionSummary(reactionsByStop[stop.id])}
 
                   {/* Postcard text */}
                   {stop.postcard_text && state !== 'pending' && (
