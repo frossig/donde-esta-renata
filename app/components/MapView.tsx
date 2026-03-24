@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { type StopThumbnail } from '@/lib/types'
 
@@ -51,6 +52,11 @@ function formatDateRange(start: string, end: string): string {
 
 export default function MapView({ stops, tripStatus, photoCounts, photosByStop }: Props) {
   const router = useRouter()
+
+  useEffect(() => {
+    const id = setInterval(() => router.refresh(), 5 * 60 * 1000)
+    return () => clearInterval(id)
+  }, []) // empty deps — runs once on mount
 
   const sortedStops = [...stops].sort((a, b) => a.display_order - b.display_order)
   const currentIndex = sortedStops.findIndex((s) => s.is_current === 1)
