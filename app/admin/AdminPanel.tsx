@@ -267,6 +267,7 @@ function StopPostcardSection({
   const [photoList, setPhotoList] = useState<AdminPhoto[]>(photos)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [messages, setMessages] = useState<Record<string, string>>({})
 
   async function handleSavePostcard() {
     setSaving(true)
@@ -310,15 +311,23 @@ function StopPostcardSection({
     try {
       const res = await fetch(`/api/photos/${photoId}`, { method: 'DELETE' })
       const data = (await res.json()) as { success?: boolean; error?: string }
-      if (data.success) {
+      if (res.ok && data.success) {
         setPhotoList((prev) => prev.filter((p) => p.id !== photoId))
         if (selectedPhotoId === photoId) setSelectedPhotoId(null)
+        setConfirmDeleteId(null)
+      } else {
+        setMessages(prev => ({
+          ...prev,
+          [photoId]: 'Error al eliminar. Intenta de nuevo.'
+        }))
       }
     } catch {
-      // silent
+      setMessages(prev => ({
+        ...prev,
+        [photoId]: 'Error al eliminar. Intenta de nuevo.'
+      }))
     } finally {
       setDeletingId(null)
-      setConfirmDeleteId(null)
     }
   }
 
@@ -455,6 +464,11 @@ function StopPostcardSection({
                     }}
                   >
                     <span style={{ color: '#fff', fontSize: '9px', textAlign: 'center' }}>¿Eliminar?</span>
+                    {messages[photo.id] && (
+                      <span style={{ color: '#f87171', fontSize: '8px', textAlign: 'center' }}>
+                        {messages[photo.id]}
+                      </span>
+                    )}
                     <div style={{ display: 'flex', gap: '4px' }}>
                       <button
                         onClick={() => handleDelete(photo.id)}

@@ -94,18 +94,31 @@ export async function POST(request: Request) {
       )
     }
 
-    await db.execute({
-      sql: `INSERT INTO trip_status (id, state, current_stop_id, from_stop_id, to_stop_id, transport_mode, updated_at)
-            VALUES (1, 'in_transit', NULL, ?, ?, ?, ?)
-            ON CONFLICT(id) DO UPDATE SET
-              state = 'in_transit',
-              current_stop_id = NULL,
-              from_stop_id = excluded.from_stop_id,
-              to_stop_id = excluded.to_stop_id,
-              transport_mode = excluded.transport_mode,
-              updated_at = excluded.updated_at`,
-      args: [fromStopId, toStopId, transportMode, updatedAt],
-    })
+    // Validate stop IDs against DB
+    const allStops = await db.execute({ sql: `SELECT id FROM stops`, args: [] })
+    const stopIds = allStops.rows.map((s) => s.id as string)
+    if (!stopIds.includes(fromStopId) || !stopIds.includes(toStopId)) {
+      return Response.json({ error: 'Invalid stop ID' }, { status: 400 })
+    }
+    if (fromStopId === toStopId) {
+      return Response.json({ error: 'from and to stops must be different' }, { status: 400 })
+    }
+
+    await db.batch([
+      { sql: 'UPDATE stops SET is_current = 0' },
+      {
+        sql: `INSERT INTO trip_status (id, state, from_stop_id, to_stop_id, transport_mode, current_stop_id, updated_at)
+              VALUES (1, 'in_transit', ?, ?, ?, NULL, ?)
+              ON CONFLICT(id) DO UPDATE SET
+                state = 'in_transit',
+                from_stop_id = excluded.from_stop_id,
+                to_stop_id = excluded.to_stop_id,
+                transport_mode = excluded.transport_mode,
+                current_stop_id = NULL,
+                updated_at = excluded.updated_at`,
+        args: [fromStopId, toStopId, transportMode, new Date().toISOString()]
+      }
+    ])
   }
 
   return Response.json({ success: true })

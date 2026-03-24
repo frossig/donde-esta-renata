@@ -33,11 +33,13 @@ export async function POST(
     )
   }
 
+  const normalizedText = text.trim() === '' ? null : text.trim()
+
   const db = await getDb()
 
   const result = await db.execute({
     sql: `UPDATE stops SET postcard_text = ? WHERE id = ?`,
-    args: [text, id],
+    args: [normalizedText, id],
   })
 
   if (result.rowsAffected === 0) {
