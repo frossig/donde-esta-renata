@@ -31,6 +31,7 @@ interface Props {
   tripStatus: TripStatus | null
   photoCounts: Record<string, number>
   photosByStop: Record<string, StopThumbnail[]>
+  reactionsByStop: Record<string, Record<string, number>>
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -50,7 +51,7 @@ function formatDateRange(start: string, end: string): string {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function MapView({ stops, tripStatus, photoCounts, photosByStop }: Props) {
+export default function MapView({ stops, tripStatus, photoCounts, photosByStop, reactionsByStop }: Props) {
   const router = useRouter()
 
   useEffect(() => {
@@ -294,6 +295,21 @@ export default function MapView({ stops, tripStatus, photoCounts, photosByStop }
                       ))}
                     </div>
                   )}
+
+                  {/* Reaction summary */}
+                  {state !== 'pending' && (() => {
+                    const emojiMap = reactionsByStop[stop.id]
+                    if (!emojiMap) return null
+                    const entries = Object.entries(emojiMap)
+                      .sort((a, b) => b[1] - a[1])
+                      .slice(0, 3)
+                    if (entries.length === 0) return null
+                    return (
+                      <p className="mt-1.5" style={{ fontSize: 13, color: '#b8905a', fontWeight: 500 }}>
+                        {entries.map(([emoji, count]) => `${emoji} ${count}`).join('  ')}
+                      </p>
+                    )
+                  })()}
 
                   {/* Postcard text */}
                   {stop.postcard_text && state !== 'pending' && (

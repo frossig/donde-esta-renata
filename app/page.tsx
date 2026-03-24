@@ -63,6 +63,25 @@ export default async function HomePage() {
     photosByStop[stopId].push({ id: row.id as string, imgKey })
   }
 
+  // Fetch aggregated emoji reactions per stop
+  const reactionsResult = await db.execute(
+    `SELECT p.stop_id, r.emoji, COUNT(*) AS count
+     FROM reactions r
+     JOIN photos p ON r.photo_id = p.id
+     WHERE r.emoji IS NOT NULL AND p.stop_id IS NOT NULL
+     GROUP BY p.stop_id, r.emoji
+     ORDER BY count DESC`
+  )
+
+  const reactionsByStop: Record<string, Record<string, number>> = {}
+  for (const row of reactionsResult.rows) {
+    const stopId = row.stop_id as string
+    const emoji = row.emoji as string
+    const count = Number(row.count ?? 0)
+    if (!reactionsByStop[stopId]) reactionsByStop[stopId] = {}
+    reactionsByStop[stopId][emoji] = count
+  }
+
   // Fetch trip_status (single row)
   const statusResult = await db.execute(`SELECT state, current_stop_id, from_stop_id, to_stop_id, transport_mode, updated_at FROM trip_status WHERE id = 1`)
 
@@ -132,6 +151,7 @@ export default async function HomePage() {
       tripStatus={computedTripStatus}
       photoCounts={photoCounts}
       photosByStop={photosByStop}
+      reactionsByStop={reactionsByStop}
     />
   )
 }
