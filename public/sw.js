@@ -13,13 +13,15 @@ self.addEventListener('install', (event) => {
 })
 
 self.addEventListener('fetch', (event) => {
-  if (SHELL_ASSETS.includes(new URL(event.request.url).pathname)) {
+  const url = new URL(event.request.url)
+
+  // Don't intercept cross-origin requests (e.g. direct PUT to R2 presigned URLs)
+  if (url.origin !== self.location.origin) return
+
+  if (SHELL_ASSETS.includes(url.pathname)) {
     // Cache-first for shell assets
     event.respondWith(
       caches.match(event.request).then((cached) => cached || fetch(event.request))
     )
-  } else {
-    // Network-first for everything else
-    event.respondWith(fetch(event.request))
   }
 })

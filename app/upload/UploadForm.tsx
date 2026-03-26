@@ -40,17 +40,22 @@ export default function UploadForm({ stops }: { stops: Stop[] }) {
 
     try {
       // Step 1: Request presigned PUT URLs
-      const signRes = await fetch('/api/upload/sign', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          files: Array.from(files).map((f) => ({ name: f.name, type: f.type })),
-        }),
-      })
+      let signRes: Response
+      try {
+        signRes = await fetch('/api/upload/sign', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            files: Array.from(files).map((f) => ({ name: f.name, type: f.type })),
+          }),
+        })
+      } catch (err) {
+        throw new Error(`[paso 1/sign] ${err instanceof Error ? err.message : err}`)
+      }
 
       if (!signRes.ok) {
         const err = (await signRes.json()) as { error?: string }
-        throw new Error(err.error ?? 'Error al obtener URLs de subida')
+        throw new Error(`[paso 1/sign ${signRes.status}] ${err.error ?? 'Error al obtener URLs de subida'}`)
       }
 
       const { uploads } = (await signRes.json()) as {
@@ -64,13 +69,18 @@ export default function UploadForm({ stops }: { stops: Stop[] }) {
       await Promise.all(
         uploads.map(async (upload, i) => {
           const file = fileArray[i]
-          const putRes = await fetch(upload.url, {
-            method: 'PUT',
-            headers: { 'Content-Type': file.type },
-            body: file,
-          })
+          let putRes: Response
+          try {
+            putRes = await fetch(upload.url, {
+              method: 'PUT',
+              headers: { 'Content-Type': file.type },
+              body: file,
+            })
+          } catch (err) {
+            throw new Error(`[paso 2/r2-put ${file.name}] ${err instanceof Error ? err.message : err}`)
+          }
           if (!putRes.ok) {
-            throw new Error(`Error al subir ${file.name}: ${putRes.status}`)
+            throw new Error(`[paso 2/r2-put ${file.name}] HTTP ${putRes.status}`)
           }
           completed++
           // Progress covers 10–80% of the bar during uploads
@@ -81,20 +91,25 @@ export default function UploadForm({ stops }: { stops: Stop[] }) {
       setProgress(85)
 
       // Step 3: Process uploads
-      const processRes = await fetch('/api/upload/process', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          files: uploads.map((u) => ({
-            key: u.key,
-            stopId: selectedStopId,
-          })),
-        }),
-      })
+      let processRes: Response
+      try {
+        processRes = await fetch('/api/upload/process', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            files: uploads.map((u) => ({
+              key: u.key,
+              stopId: selectedStopId,
+            })),
+          }),
+        })
+      } catch (err) {
+        throw new Error(`[paso 3/process] ${err instanceof Error ? err.message : err}`)
+      }
 
       if (!processRes.ok) {
         const err = (await processRes.json()) as { error?: string }
-        throw new Error(err.error ?? 'Error al procesar las fotos')
+        throw new Error(`[paso 3/process ${processRes.status}] ${err.error ?? 'Error al procesar las fotos'}`)
       }
 
       const { results: processResults } = (await processRes.json()) as {

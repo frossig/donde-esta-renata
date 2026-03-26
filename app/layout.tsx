@@ -4,7 +4,6 @@ import Link from "next/link";
 import "./globals.css";
 import { getRoleFromCookies } from "@/lib/auth";
 
-export const dynamic = 'force-dynamic'
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
