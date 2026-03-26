@@ -1,5 +1,5 @@
-const CACHE_NAME = 'donde-esta-renata-v1'
-const SHELL_ASSETS = ['/', '/login']
+const CACHE_NAME = 'donde-esta-renata-v2'
+const SHELL_ASSETS = ['/login']
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(clients.claim())

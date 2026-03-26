@@ -73,7 +73,7 @@ export default function LoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               required
               disabled={loading}
-              placeholder="••••••••"
+              placeholder="escribí la contraseña"
               className="w-full rounded-lg px-4 py-2.5 text-sm outline-none transition-shadow disabled:opacity-60"
               style={{
                 border: '1.5px solid #d4a882',

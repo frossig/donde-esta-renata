@@ -16,9 +16,9 @@ interface UploadResult {
   photoId: string
 }
 
-export default function UploadForm({ stops }: { stops: Stop[] }) {
+export default function UploadForm({ stops, defaultStopId }: { stops: Stop[], defaultStopId?: string | null }) {
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [selectedStopId, setSelectedStopId] = useState<string>('auto')
+  const [selectedStopId, setSelectedStopId] = useState<string>(defaultStopId ?? 'auto')
   const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState(0) // 0–100
   const [results, setResults] = useState<UploadResult[] | null>(null)

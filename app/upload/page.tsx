@@ -8,9 +8,10 @@ export default async function UploadPage() {
   if (role !== 'admin') redirect('/')
 
   const db = await getDb()
-  const stopsResult = await db.execute(
-    `SELECT id, name, flag, country FROM stops ORDER BY display_order ASC`,
-  )
+  const [stopsResult, statusResult] = await Promise.all([
+    db.execute(`SELECT id, name, flag, country FROM stops ORDER BY display_order ASC`),
+    db.execute(`SELECT state, current_stop_id, to_stop_id FROM trip_status WHERE id = 1`),
+  ])
 
   const stops = stopsResult.rows.map((r) => ({
     id:      r.id      as string,
@@ -18,6 +19,13 @@ export default async function UploadPage() {
     flag:    r.flag    as string,
     country: r.country as string,
   }))
+
+  const status = statusResult.rows[0]
+  const defaultStopId = status
+    ? status.state === 'at_stop'
+      ? (status.current_stop_id as string | null)
+      : (status.to_stop_id as string | null)
+    : null
 
   return (
     <main className="min-h-screen bg-stone-50 py-10 px-4">
@@ -30,7 +38,7 @@ export default async function UploadPage() {
         </div>
 
         <div className="bg-white rounded-2xl shadow-sm border border-stone-200 p-6">
-          <UploadForm stops={stops} />
+          <UploadForm stops={stops} defaultStopId={defaultStopId} />
         </div>
 
         <p className="mt-4 text-center">
